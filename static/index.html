@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baccaroo - Blackjack</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+        }
+        h1 { color: #e94560; margin-bottom: 1rem; }
+        .info { color: #888; margin-bottom: 2rem; font-size: 0.9rem; }
+        #game-area {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 600px;
+            min-height: 400px;
+        }
+        .hand { margin: 1rem 0; }
+        .hand-label { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .cards { font-size: 1.5rem; margin: 0.5rem 0; letter-spacing: 4px; }
+        .total { font-size: 0.9rem; color: #aaa; }
+        .phase { color: #e94560; font-weight: bold; margin: 1rem 0; }
+        .balance { color: #0f3460; background: #e94560; padding: 0.5rem 1rem; border-radius: 6px; font-weight: bold; display: inline-block; margin-bottom: 1rem; }
+        .actions { margin: 1.5rem 0; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .actions button {
+            background: #0f3460;
+            color: #eee;
+            border: 2px solid #e94560;
+            padding: 0.7rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        .actions button:hover { background: #e94560; }
+        .actions button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .settlement { background: #0f3460; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+        .settlement .reason { font-size: 1.2rem; font-weight: bold; }
+        .settlement .payout { color: #4ecca3; }
+        #bet-section input {
+            background: #0f3460;
+            border: 2px solid #e94560;
+            color: #eee;
+            padding: 0.5rem;
+            border-radius: 6px;
+            width: 100px;
+            font-size: 1rem;
+            text-align: center;
+        }
+        .reveal { font-size: 0.75rem; color: #666; word-break: break-all; margin-top: 1rem; }
+        #messages { color: #e94560; margin: 0.5rem 0; min-height: 1.5rem; }
+    </style>
+</head>
+<body>
+    <h1>Baccaroo</h1>
+    <p class="info">Secure Blackjack - Server-Authoritative</p>
+
+    <div id="game-area">
+        <div class="balance">Balance: $<span id="balance">--</span></div>
+        <div id="messages"></div>
+
+        <div id="setup-section">
+            <div class="actions">
+                <button onclick="newSession()">New Game</button>
+            </div>
+            <div id="bet-section" style="display:none">
+                <label>Bet: $</label>
+                <input type="number" id="bet-amount" value="10" min="1" max="500">
+                <button onclick="placeBet()">Place Bet</button>
+            </div>
+        </div>
+
+        <div id="game-section" style="display:none">
+            <div class="hand">
+                <div class="hand-label">Dealer</div>
+                <div class="cards" id="dealer-cards"></div>
+                <div class="total" id="dealer-total"></div>
+            </div>
+            <div class="hand">
+                <div class="hand-label">Player</div>
+                <div class="cards" id="player-cards"></div>
+                <div class="total" id="player-total"></div>
+            </div>
+            <div class="phase">Phase: <span id="phase"></span></div>
+            <div class="actions" id="action-buttons"></div>
+            <div id="settlement-area"></div>
+            <div class="reveal" id="reveal-area"></div>
+        </div>
+    </div>
+
+    <script>
+        // The player ID is generated once per browser session.
+        let playerId = localStorage.getItem('playerId');
+        if (!playerId) {
+            playerId = crypto.randomUUID();
+            localStorage.setItem('playerId', playerId);
+        }
+
+        let sessionId = null;
+
+        const headers = () => ({
+            'Content-Type': 'application/json',
+            'X-Player-Id': playerId,
+        });
+
+        function msg(text) {
+            document.getElementById('messages').textContent = text;
+        }
+
+        async function fetchBalance() {
+            try {
+                const res = await fetch(`/api/balance/${playerId}`, { headers: headers() });
+                const data = await res.json();
+                document.getElementById('balance').textContent = data.balance ?? '--';
+            } catch (_) { /* ignore */ }
+        }
+
+        async function newSession() {
+            msg('');
+            try {
+                const res = await fetch('/api/session/new', {
+                    method: 'POST',
+                    headers: headers(),
+                    body: JSON.stringify({ player_id: playerId }),
+                });
+                const data = await res.json();
+                if (!res.ok) { msg(data.error); return; }
+                sessionId = data.session_id;
+                document.getElementById('bet-section').style.display = 'block';
+                document.getElementById('game-section').style.display = 'none';
+                document.getElementById('settlement-area').innerHTML = '';
+                document.getElementById('reveal-area').innerHTML = '';
+                msg(data.message);
+                fetchBalance();
+            } catch (e) { msg('Network error'); }
+        }
+
+        async function placeBet() {
+            const amount = parseInt(document.getElementById('bet-amount').value, 10);
+            if (!amount || amount < 1) { msg('Invalid bet'); return; }
+            try {
+                const res = await fetch(`/api/session/${sessionId}/bet`, {
+                    method: 'POST',
+                    headers: headers(),
+                    body: JSON.stringify({ amount, action_id: crypto.randomUUID() }),
+                });
+                const data = await res.json();
+                if (!res.ok) { msg(data.error); return; }
+                document.getElementById('bet-section').style.display = 'none';
+                renderState(data);
+            } catch (e) { msg('Network error'); }
+        }
+
+        async function doAction(action) {
+            try {
+                const res = await fetch(`/api/session/${sessionId}/action`, {
+                    method: 'POST',
+                    headers: headers(),
+                    body: JSON.stringify({ action, action_id: crypto.randomUUID() }),
+                });
+                const data = await res.json();
+                if (!res.ok) { msg(data.error); return; }
+                renderState(data);
+            } catch (e) { msg('Network error'); }
+        }
+
+        function renderState(state) {
+            document.getElementById('game-section').style.display = 'block';
+            document.getElementById('player-cards').textContent = state.player_cards.join(' ');
+            document.getElementById('player-total').textContent = `Total: ${state.player_total}`;
+            document.getElementById('dealer-cards').textContent = state.dealer_cards.join(' ');
+            document.getElementById('dealer-total').textContent = state.dealer_total != null ? `Total: ${state.dealer_total}` : '';
+            document.getElementById('phase').textContent = state.phase;
+
+            const btns = document.getElementById('action-buttons');
+            btns.innerHTML = '';
+            for (const a of state.available_actions) {
+                const b = document.createElement('button');
+                b.textContent = a.charAt(0).toUpperCase() + a.slice(1);
+                b.onclick = () => doAction(a);
+                btns.appendChild(b);
+            }
+
+            if (state.settlement) {
+                const s = state.settlement;
+                document.getElementById('settlement-area').innerHTML = `
+                    <div class="settlement">
+                        <div class="reason">${s.reason}</div>
+                        <div class="payout">Payout: $${s.payout}</div>
+                    </div>`;
+                // Show reveal link.
+                const revealBtn = document.createElement('button');
+                revealBtn.textContent = 'Verify Fairness';
+                revealBtn.onclick = showReveal;
+                btns.appendChild(revealBtn);
+
+                // Show new game button.
+                const newBtn = document.createElement('button');
+                newBtn.textContent = 'New Game';
+                newBtn.onclick = newSession;
+                btns.appendChild(newBtn);
+
+                fetchBalance();
+            }
+            msg('');
+        }
+
+        async function showReveal() {
+            try {
+                const res = await fetch(`/api/session/${sessionId}/reveal`, { headers: headers() });
+                const data = await res.json();
+                if (!res.ok) { msg(data.error); return; }
+                document.getElementById('reveal-area').innerHTML =
+                    `<strong>Seed:</strong> ${data.seed}<br><strong>Commitment:</strong> ${data.commitment}`;
+            } catch (e) { msg('Network error'); }
+        }
+
+        // Initial balance fetch.
+        fetchBalance();
+    </script>
+</body>
+</html>
