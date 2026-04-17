@@ -26,11 +26,11 @@ async fn main() {
     let app = Router::new()
         // API routes.
         .route("/api/session/new", post(routes::new_session))
-        .route("/api/session/{id}/bet", post(routes::place_bet))
-        .route("/api/session/{id}/action", post(routes::submit_action))
-        .route("/api/session/{id}/state", get(routes::get_state))
-        .route("/api/session/{id}/reveal", get(routes::reveal_seed))
-        .route("/api/balance/{player_id}", get(routes::get_balance))
+        .route("/api/session/:id/bet", post(routes::place_bet))
+        .route("/api/session/:id/action", post(routes::submit_action))
+        .route("/api/session/:id/state", get(routes::get_state))
+        .route("/api/session/:id/reveal", get(routes::reveal_seed))
+        .route("/api/balance/:player_id", get(routes::get_balance))
         // Health check.
         .route("/health", get(|| async { "ok" }))
         // Static files for the web UI.
