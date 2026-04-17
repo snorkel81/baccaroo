@@ -121,6 +121,7 @@
         async function fetchBalance() {
             try {
                 const res = await fetch(`/api/balance/${playerId}`, { headers: headers() });
+                if (!res.ok) return; // Not authenticated yet or player not registered.
                 const data = await res.json();
                 document.getElementById('balance').textContent = data.balance ?? '--';
             } catch (_) { /* ignore */ }
@@ -226,8 +227,7 @@
             } catch (e) { msg('Network error'); }
         }
 
-        // Initial balance fetch.
-        fetchBalance();
+        // Balance is only fetched after session creation (requires auth).
     </script>
 </body>
 </html>
