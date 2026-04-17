@@ -35,7 +35,7 @@ async fn main() {
         .route("/health", get(|| async { "ok" }))
         // Static files for the web UI.
         .nest_service("/static", ServeDir::new("static"))
-        .nest_service("/", ServeDir::new("static"))
+        .fallback_service(ServeDir::new("static"))
         // Middleware (applied bottom-up).
         .layer(middleware::from_fn(auth_check))
         .layer(middleware::from_fn(request_logging))

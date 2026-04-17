@@ -72,9 +72,14 @@ pub async fn request_logging(request: Request, next: Next) -> Response {
 /// session tokens. For now it just checks for the presence of an
 /// X-Player-Id header.
 pub async fn auth_check(request: Request, next: Next) -> Result<Response, StatusCode> {
-    // For the /static paths and health check, skip auth.
+    // Skip auth for static assets, health check, and balance lookups.
     let path = request.uri().path().to_string();
-    if path.starts_with("/static") || path == "/health" || path == "/" {
+    if path.starts_with("/static")
+        || path.starts_with("/api/balance")
+        || path == "/health"
+        || path == "/"
+        || path == "/favicon.ico"
+    {
         return Ok(next.run(request).await);
     }
 
